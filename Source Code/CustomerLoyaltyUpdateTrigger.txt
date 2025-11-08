@@ -1,0 +1,55 @@
+trigger CustomerLoyaltyUpdateTrigger on HandsMen_Order__c (after insert, after update) {
+   
+    Set<Id> customerIds = new Set<Id>();
+    
+    for (HandsMen_Order__c order : Trigger.new) {
+        if (order.HandsMen_Customer__c != null) {
+            customerIds.add(order.HandsMen_Customer__c);
+        }
+    }
+    
+ 
+    List<HandsMen_Customer__c> customersToUpdate = new List<HandsMen_Customer__c>();
+     
+    for (Id customerId : customerIds) {
+      
+        AggregateResult[] results = [
+            SELECT SUM(Total_Amount__c) totalSum
+            FROM HandsMen_Order__c
+            WHERE HandsMen_Customer__c = :customerId
+        ];
+        
+        Decimal totalPurchases = 0;
+        if (results[0].get('totalSum') != null) {
+            totalPurchases = (Decimal)results[0].get('totalSum');
+        }
+        
+   
+        String newLoyaltyStatus;
+        if (totalPurchases >= 1000) {
+            newLoyaltyStatus = 'Gold';
+        } else if (totalPurchases >= 500) {
+            newLoyaltyStatus = 'Silver';
+        } else {
+            newLoyaltyStatus = 'Bronze';
+        }
+        
+         
+        HandsMen_Customer__c customer = [
+            SELECT Id, Loyalty_Status__c 
+            FROM HandsMen_Customer__c 
+            WHERE Id = :customerId 
+            LIMIT 1
+        ];
+        
+        if (customer.Loyalty_Status__c != newLoyaltyStatus) {
+            customer.Loyalty_Status__c = newLoyaltyStatus;
+            customersToUpdate.add(customer);
+        }
+    }
+    
+   
+    if (!customersToUpdate.isEmpty()) {
+        update customersToUpdate;
+    }
+}
